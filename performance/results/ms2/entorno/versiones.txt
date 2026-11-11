@@ -1,0 +1,23 @@
+VERSIONES DE HERRAMIENTAS UTILIZADAS
+=====================================
+
+k6:
+  Versión: v2.2.0 (commit/00a9a1b7f5, go1.26.5, windows/amd64)
+  Ruta: k6 (disponible en PATH del sistema)
+
+Vegeta:
+  Versión: v12.13.0
+  Ruta: C:\Users\marsi\OneDrive\Documents\Integracion\tools\vegeta\vegeta.exe
+  Origen: https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_windows_amd64.zip
+  Checksum SHA256 del ZIP: 421362edb7c8e1b97db9faf43806d2a8850067afc97c2f1bf9bc5cdcdfc9c0b6
+  Checksums.txt: coincidencia verificada
+
+Scripts de k6:
+  Archivo: performance/k6/healthcheck.js (no usado en este benchmark)
+  Archivo: pdfextractext/tests/stress/k6_spike.js (usado)
+
+Scripts de Vegeta:
+  Archivo: pdfextractext/tests/stress/vegeta_attack.sh (no ejecutado directamente, se usaron los comandos equivalentes)
+  Archivo: pdfextractext/tests/stress/targets.txt (usado)
+
+Fecha de ejecución: 10/11/2026

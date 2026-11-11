@@ -1,0 +1,35 @@
+CONFIGURACIÓN DE DOCKER
+=======================
+
+Servicios definidos en pdfextractext/docker-compose.yml:
+
+1. traefik (v3)
+   - Puerto publicado: 80:80, 8081:8080
+   - Volumen: /var/run/docker.sock:/var/run/docker.sock:ro
+   - Comandos: --providers.docker=true, --providers.docker.exposedbydefault=false, --entrypoints.web.address=:80, --api.insecure=true
+
+2. document-service
+   - Imagen: pdfextractext-document-service (build local)
+   - Réplicas: 5
+   - Límites: 1.0 CPU, 1024 MB (1 GiB) por réplica
+   - Variable de entorno: MAX_FILE_SIZE_MB=5
+   - Etiquetas de Traefik: traefik.enable=true, router document-service, puerto servidor 8000
+
+Red: pdfextractext_default (bridge)
+
+Estado de los contenedores (después del despliegue):
+- pdfextractext-document-service-1: Up, puerto 8000/tcp
+- pdfextractext-document-service-2: Up, puerto 8000/tcp
+- pdfextractext-document-service-3: Up, puerto 8000/tcp
+- pdfextractext-document-service-4: Up, puerto 8000/tcp
+- pdfextractext-document-service-5: Up, puerto 8000/tcp
+- pdf_traefik: Up, puertos 0.0.0.0:80->80/tcp, 0.0.0.0:8081->8080/tcp
+
+Todos los contenedores en la red pdfextractext_default.
+Direcciones IP de las réplicas: 172.18.0.2 a 172.18.0.6
+Dirección IP de Traefik: 172.18.0.3
+
+Límites de recursos verificados en contenedores (cgroup v2):
+- NanoCpus: 1000000000 (1.0 CPU) por réplica
+- Memory: 1073741824 bytes (1 GiB) por réplica
+- Consumo real: ~148 MiB RAM, ~0.2-6% CPU por réplica (en reposo)

@@ -1,0 +1,192 @@
+﻿# =============================================================================
+# docker-compose.integration.yml — Etapa 7 / 9.5
+# Orquestación conjunta MS1 (Gateway) + MS3 (CRUD) -> MS2 (Extract)
+# con MongoDB como única dependencia de persistencia.
+#
+# Uso (desde la carpeta pdfinfraestructure/):
+#   docker compose -f docker-compose.integration.yml config --quiet   # validar
+#   docker compose -f docker-compose.integration.yml build
+#   docker compose -f docker-compose.integration.yml up -d
+#
+# Este archivo NO depende de los compose individuales de cada repositorio
+# (los cuales incorporan Traefik y réplicas múltiples, no requeridos aquí).
+# No implementa colas, workers, Redis, RabbitMQ ni Traefik.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. MongoDB — única persistencia; aislado en db_net (solo lo alcanza MS3)
+  # ---------------------------------------------------------------------------
+  db:
+    image: mongo:8.0
+    container_name: integracion_mongo_db
+    restart: unless-stopped
+    # Acceso desde el host para inspección local (mongosh).
+    # 27018 en el host para no colisionar con pdf_mongo_db (puerto 27017
+    # ocupado por el Compose individual preexistente). El puerto INTERNO
+    # sigue siendo 27017: la URI de MS3 (@db:27017) no cambia.
+    ports:
+      - "27018:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - db_net
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # 2. extract-service (MS2 — pdfextractext) — stateless, sin MongoDB
+  #    Host: 8002 -> Contenedor: 8000
+  # ---------------------------------------------------------------------------
+  extract-service:
+    build:
+      context: ../pdfextractext
+      dockerfile: Dockerfile
+    container_name: integracion_extract_service
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      # Configuración real de MS2: límite de tamaño de PDF (MB)
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-5}
+    healthcheck:
+      # GET /health verificado en MS2 (src/main.py). La imagen base
+      # python:3.12-slim no incluye curl; se usa la stdlib de Python.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      # Solo la red compartida con MS3: NO comparte red con MongoDB
+      - integration_net
+
+  # ---------------------------------------------------------------------------
+  # 3. crud-service (MS3 — pdfcrudservice) — orquestador del flujo síncrono
+  #    Host: 8001 -> Contenedor: 8000
+  # ---------------------------------------------------------------------------
+  crud-service:
+    build:
+      context: ../pdfcrudservice
+      dockerfile: Dockerfile
+    container_name: integracion_crud_service
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    depends_on:
+      # Espera a MongoDB sano antes de arrancar (el lifespan de MS3
+      # falla el startup si la BD no responde).
+      db:
+        condition: service_healthy
+      # Espera a MS2 saludable: el flujo síncrono lo invoca en cada POST.
+      extract-service:
+        condition: service_healthy
+    environment:
+      # --- MongoDB (credenciales interpoladas desde .env) ---
+      - MONGO_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@db:27017/?authSource=admin
+      - MONGO_DB_DEV=${MONGO_DB_DEV:-pdf_database_dev}
+      - MONGO_COLLECTION=${MONGO_COLLECTION:-processed_pdfs}
+      # --- Límite de tamaño de PDF (MB) ---
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-5}
+      # --- Configuración de comunicación con MS2 ---
+      # URL BASE únicamente: el código de MS3 agrega el path /extract.
+      # NO incluir /extract aquí (provocaría /extract/extract).
+      - EXTRACT_SERVICE_URL=http://extract-service:8000
+      - EXTRACT_SERVICE_TIMEOUT=30
+    healthcheck:
+      # GET /health de MS3 (FastAPI). python:3.12-slim no incluye curl;
+      # se usa la stdlib de Python.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - integration_net
+      - db_net
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # 4. gateway-service (MS1 — pdfapigateway) — punto de entrada único
+  #    Host: 8003 -> Contenedor: 8000
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: ../pdfapigateway
+      dockerfile: Dockerfile
+    container_name: integracion_ms1_gateway
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    depends_on:
+      # Espera a que MS3 esté sana: el gateway deriva toda solicitud a MS3.
+      crud-service:
+        condition: service_healthy
+    environment:
+      # URL base de MS3 dentro de Docker (nombre de servicio, puerto interno).
+      # El código de MS1 agrega el path /documents.
+      - MS3_URL=http://crud-service:8000
+      - MS3_TIMEOUT=40
+      - APP_PORT=8000
+      - HOST_PORT=8003
+      - LOG_LEVEL=INFO
+    healthcheck:
+      # GET /health del gateway. python:3.12-slim no incluye curl.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      # Solo la red compartida con MS3: NO alcanza a MongoDB ni a MS2 directamente
+      - integration_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+# -----------------------------------------------------------------------------
+# Redes
+#   integration_net : MS2 <-> MS3 (comunicación síncrona de extracción)
+#   db_net          : MongoDB <-> MS3 solamente (internal: ignora el mundo
+#                     exterior; MS2 no puede alcanzar a Mongo ni a la host)
+# -----------------------------------------------------------------------------
+networks:
+  integration_net:
+    driver: bridge
+  db_net:
+    driver: bridge
+    internal: true
+
+# -----------------------------------------------------------------------------
+# Volúmenes
+# -----------------------------------------------------------------------------
+volumes:
+  mongo_data:
+

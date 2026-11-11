@@ -1,0 +1,39 @@
+# =================================================================
+# .gitignore — pdfinfraestructure (infraestructura y despliegue integrado)
+# =================================================================
+
+# --- Variables de entorno y secretos (12-Factor App) ---
+# .env con credenciales reales NO se versiona. Copiar desde .env.example localmente.
+.env
+.env.*
+!.env.example
+
+# --- Control de versiones ---
+.git
+!.gitignore
+.github
+
+# --- Entornos locales y artefactos de Python (si se usan scripts auxiliares) ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.egg-info/
+
+# --- Docker y despliegue (archivos propios de cada microservicio, no de aquí) ---
+Dockerfile
+.dockerignore
+# docker-compose de cada microservicio no se versiona aquí (pertenecen a sus propios repos)
+docker-compose.yml
+docker-compose.single.yml
+docker-compose.override.yml
+# El compose integrado SÍ se versiona en este repositorio; no ignorarlo
+!docker-compose.integration.yml

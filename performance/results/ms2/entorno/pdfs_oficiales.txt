@@ -1,0 +1,26 @@
+PDFs OFICIALES UTILIZADOS EN LAS PRUEBAS
+=========================================
+
+Ubicación: pdfextractext/tests/stress/pdfs/
+
+1. 2020-Scrum-Guide-Spanish-Latin-South-American.pdf
+   Tamaño: 319,343 bytes (~319 KB)
+
+2. Essential-Kanban-Condensed-Spanish.pdf
+   Tamaño: 8,901,466 bytes (~8.9 MB)
+
+3. Filosofia Lean.pdf
+   Tamaño: 668,142 bytes (~668 KB)
+
+4. scrum_manager_historias_usuario.pdf
+   Tamaño: 3,830,899 bytes (~3.83 MB)
+
+Fixtures adicionales (no usados en las pruebas de esta etapa):
+- small_1p.pdf: 859 bytes
+- small_3p.pdf: 2,442 bytes
+- medium_10p.pdf: 44,36 bytes (probablemente 44,360 bytes)
+
+Notas:
+- Los scripts de k6 (k6_spike.js) generan PDFs inline en el código JavaScript, no usan los PDFs oficiales.
+- Los scripts de Vegeta (targets.txt) rotan entre los 4 PDFs de la carpeta pdfs/.
+- El tamaño máximo permitido por MS2 es 5 MB (MAX_FILE_SIZE_MB=5). Algunos PDFs superan este límite y devolverán 413.
