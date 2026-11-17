@@ -11,7 +11,36 @@ Orquestacion conjunta de:
 - **MS2** (`pdfextractext`): extraccion de texto de PDF.
 - **MongoDB**: persistencia de documentos.
 
-Flujo síncrono: MS1 → MS3 → MS2 → MongoDB.
+Flujo síncrono: usuario → Traefik público → MS1 → MS3 → Traefik interno → MS2.
+MS3 conserva la comunicación con MongoDB; MS2 no utiliza persistencia.
+
+## Arquitectura y redes integradas
+
+```text
+Usuario/k6 -- localhost:8080 --> traefik-public -- proxy_public --> MS1:8000
+                                                               |
+                                                             app_net
+                                                               |
+                                                              MS3:8000 -- db_net --> MongoDB:27017
+                                                               |
+                                                        proxy_internal
+                                                               |
+                                         traefik-internal:8080 --+--> MS2:8000 × N
+```
+
+- `traefik-public` publica únicamente `127.0.0.1:8080` y enruta a MS1.
+- `traefik-internal` no publica puertos y solo comparte `proxy_internal` con MS3/MS2.
+- `proxy_public`: Traefik público y MS1.
+- `app_net`: MS1 y MS3.
+- `proxy_internal`: Traefik interno, MS3 y réplicas MS2; es una red interna de Docker.
+- `db_net`: MS3 y MongoDB; continúa marcada `internal: true`.
+- MongoDB conserva el volumen `pdfinfraestructure_mongo_data`; no publica `27017`.
+- Los servicios de aplicación escuchan internamente en `8000`; MongoDB en `27017`.
+
+Ambas instancias fijan Traefik en `v3.7.13`, tienen Docker provider habilitado,
+`exposedByDefault=false`, restricciones de descubrimiento separadas, dashboard/API
+deshabilitados y socket Docker montado de solo lectura. `:ro` no es una garantía
+de aislamiento de la API Docker; el acceso al daemon sigue siendo un riesgo.
 
 Cada microservicio es un repositorio Git independiente con su propio ciclo de
 vida. Este repositorio contiene únicamente la configuración de despliegue
@@ -60,8 +89,29 @@ pdfinfraestructure/
 ## Variables de entorno
 
 Copiar `.env.example` a `.env` y ajustar los valores antes de ejecutar el
-despliegue. El archivo `.env` con credenciales reales no se versiona (ver
-`.gitignore`).
+despliegue. Ese archivo solo lo lee Docker Compose para interpolar e inyectar
+variables; no se monta ni se copia dentro de los contenedores. Las aplicaciones
+leen exclusivamente variables del entorno. Para ejecutar un servicio localmente
+fuera de Docker, desde la carpeta de ese microservicio usar
+`uv run --env-file ../pdfinfraestructure/.env ...`.
+El archivo `.env` con credenciales reales no se versiona (ver `.gitignore`).
+
+La plantilla central documenta las variables y ejemplos. La selección depende
+del modo de ejecución:
+
+| Variable(s) | Uso |
+|---|---|
+| `MONGO_INITDB_ROOT_USERNAME`, `MONGO_INITDB_ROOT_PASSWORD`, `MONGO_DB_DEV`, `MONGO_COLLECTION` | Compose configura MongoDB y los parámetros de MS3. `MONGO_URL` se usa al ejecutar MS3 localmente; Docker recibe una URI interna autenticada hacia `db`. |
+| `MS3_URL`, `EXTRACT_SERVICE_URL` | Direcciones locales usadas al ejecutar MS1/MS3 fuera de Docker. |
+| `MS3_URL_DOCKER`, `EXTRACT_SERVICE_URL_DOCKER` | Direcciones internas inyectadas por el Compose integrado. |
+| `EXTRACT_SERVICE_URL_SINGLE_DOCKER`, `MONGO_URL_DOCKER` | Overrides opcionales para el Compose individual de MS3 y la URI interna de MongoDB, respectivamente. |
+| `MAX_FILE_SIZE_MB`, `EXTRACT_SERVICE_TIMEOUT`, `MS3_TIMEOUT`, `LOG_LEVEL` | Ajustes de aplicación inyectados en los servicios correspondientes. |
+| `TRAEFIK_PUBLIC_HOST_PORT` | Puerto host de Traefik público en el Compose integrado; default `8080`. |
+| `APP_PORT`, `MS2_HOST_PORT` | Solo publican MS3/MS2, respectivamente, al combinar el Compose individual con su override `docker-compose.single.yml`; no cambian el puerto interno `8000`. |
+
+Para Compose individual, indicar explícitamente el archivo central con
+`--env-file ../pdfinfraestructure/.env` al ejecutar desde el repositorio del
+servicio. El Compose integrado debe ejecutarse desde `pdfinfraestructure/`.
 
 ## Ejecutar el despliegue integrado
 
@@ -73,9 +123,28 @@ docker compose -f docker-compose.integration.yml build            # construir im
 docker compose -f docker-compose.integration.yml up -d            # levantar servicios
 ```
 
-Puertos publicados: MS1 (8003), MS3 (8001), MS2 (8002), MongoDB inspeccion (27018).
-Redes: `integration_net` (MS1, MS3, MS2), `db_net` (MongoDB, MS3, interna).
-Volumen: `mongo_data` (persistencia de MongoDB).
+Puerto publicado: Traefik público en `127.0.0.1:8080` (`TRAEFIK_PUBLIC_HOST_PORT`).
+MS1, MS2, MS3 y MongoDB no publican puertos al host.
+
+Para escalar MS2 manualmente, ejecutar desde `pdfinfraestructure/`:
+
+```bash
+docker compose -f docker-compose.integration.yml up -d --scale extract-service=1
+docker compose -f docker-compose.integration.yml up -d --scale extract-service=2
+docker compose -f docker-compose.integration.yml up -d --scale extract-service=3
+docker compose -f docker-compose.integration.yml up -d --scale extract-service=5
+```
+
+Traefik interno descubre cada contenedor MS2 mediante Docker provider y balancea
+entre sus réplicas saludables. No se configura autoscaling ni Swarm.
+
+## Compose individuales
+
+Los Compose individuales de MS2 y MS3 son para desarrollo independiente y no
+forman parte de este despliegue integrado. El Compose individual de MS3 conserva
+su propia configuración de Traefik; no combinarlo con este stack centralizado.
+El Compose individual de MS2 permanece sin proxy y no se modifica en esta etapa.
+Para integración, usar únicamente `docker-compose.integration.yml`.
 
 ## Correcciones aplicadas (ETAPA 16.3)
 
