@@ -6,13 +6,13 @@
 // Todos los VUs consultan el mismo documento. Solo realiza solicitudes GET.
 // No crea, modifica ni elimina documentos.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e DOC_ID=<id> -e VUS=5 -e DURATION=60s performance/k6/get_document_by_id_concurrent.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e DOC_ID=<id> -e VUS=5 -e DURATION=60s performance/k6/get_document_by_id_concurrent.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const DOC_ID = __ENV.DOC_ID;
 
 export const options = {
@@ -30,7 +30,7 @@ const errorRate = new Rate('get_document_by_id_concurrent_errors');
 export function setup() {
   if (!DOC_ID || DOC_ID.trim() === '') {
     throw new Error(
-      'DOC_ID es obligatorio y no puede estar vacío. Ejemplo: k6 run -e BASE_URL=http://localhost:8003 -e DOC_ID=<id> -e VUS=5 -e DURATION=60s performance/k6/get_document_by_id_concurrent.js'
+      'DOC_ID es obligatorio y no puede estar vacío. Ejemplo: k6 run -e BASE_URL=http://localhost:8080 -e DOC_ID=<id> -e VUS=5 -e DURATION=60s performance/k6/get_document_by_id_concurrent.js'
     );
   }
   return { docId: DOC_ID.trim() };

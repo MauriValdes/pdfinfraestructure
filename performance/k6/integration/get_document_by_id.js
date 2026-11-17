@@ -5,7 +5,7 @@
 // Descripci\u00f3n: Crea un documento (POST) y luego lo consulta por ID.
 // \u00danicamente opera sobre documentos creados por el propio test.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=5 get_document_by_id.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=5 get_document_by_id.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -16,7 +16,7 @@ function parsePositiveInt(envValue, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parsePositiveInt(__ENV.ITERATIONS, 5);
 
 const createdIds = [];

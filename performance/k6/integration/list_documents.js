@@ -5,13 +5,13 @@
 // Descripci\u00f3n: Eval\u00faa la lectura de la colecci\u00f3n de documentos.
 // No modifica datos.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 list_documents.js
+//   k6 run -e BASE_URL=http://localhost:8080 list_documents.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 function parsePositiveInt(envValue, fallback) {
   const v = parseInt(envValue, 10);

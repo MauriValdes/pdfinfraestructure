@@ -5,13 +5,13 @@
 // Descripción: Sube un PDF mediano generado inline (~50 KB, válido).
 // Cada iteración crea un documento persistente en MongoDB.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=3 upload_medium_pdf.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=3 upload_medium_pdf.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
 const createdIds = [];

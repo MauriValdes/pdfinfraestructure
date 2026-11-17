@@ -6,13 +6,13 @@
 // Los IDs usados son documentos creados por el propio test (no documentos
 // preexistentes de la base).
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e VUS=20 -e DURATION=60s mixed_read_concurrency.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e VUS=20 -e DURATION=60s mixed_read_concurrency.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 function parsePositiveInt(envValue, fallback) {
   const v = parseInt(envValue, 10);

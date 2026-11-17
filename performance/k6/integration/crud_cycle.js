@@ -6,13 +6,13 @@
 // Únicamente opera sobre documentos creados por el propio test.
 // No afecta documentos ajenos.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=3 crud_cycle.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=3 crud_cycle.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
 const createdIds = [];

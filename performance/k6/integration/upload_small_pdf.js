@@ -7,13 +7,13 @@
 // No repetir el mismo PDF esperando 201 (el índice checksum_unique rechaza
 // duplicados con 400).
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=5 upload_small_pdf.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=5 upload_small_pdf.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
 const createdIds = [];

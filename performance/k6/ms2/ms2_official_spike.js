@@ -1,17 +1,16 @@
 // =============================================================================
 // k6 — Validación de rendimiento MS2 con PDFs oficiales (ETAPA 14.11)
 //
-// Endpoint: POST /extract (MS2 directo vía Traefik)
+// Endpoint: POST /extract vía Traefik interno (ejecutar en proxy_internal)
 // Descripción: Mide el rendimiento de MS2 utilizando exclusivamente los
 // PDFs oficiales que cumplen el límite de 5 MB.
 // Perfil de carga: 0→100 VUs en 10s, 100 VUs sostenidos 20s, 100→0 en 10s.
-// Uso:
-//   k6 run -e BASE_URL=http://localhost:80 performance/k6/ms2_official_spike.js
+// Ejecutar k6 en un contenedor temporal conectado a la red proxy_internal.
 // =============================================================================
 import http from 'k6/http';
 import { check } from 'k6';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:80';
+const BASE_URL = __ENV.BASE_URL || 'http://traefik-internal:8080';
 
 // Los archivos se abren en el "init context": k6 los carga UNA sola vez
 // por VU y los reutilizan en todas las iteraciones (eficiente en memoria).

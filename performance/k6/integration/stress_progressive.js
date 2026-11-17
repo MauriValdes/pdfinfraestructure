@@ -6,13 +6,13 @@
 // Etapa 1: 10 VUs, Etapa 2: 25 VUs, Etapa 3: 50 VUs.
 // Únicamente operaciones de lectura; no crea, modifica ni elimina documentos.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 stress_progressive.js
+//   k6 run -e BASE_URL=http://localhost:8080 stress_progressive.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 function parsePositiveInt(envValue, fallback) {
   const v = parseInt(envValue, 10);

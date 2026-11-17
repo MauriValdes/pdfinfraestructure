@@ -4,7 +4,7 @@ Esta carpeta contiene scripts de **Grafana k6** para evaluar el rendimiento de l
 integración completa a través de MS1 (API Gateway), publicado en:
 
 ```
-http://localhost:8003
+http://localhost:8080
 ```
 
 ## Estructura
@@ -32,24 +32,24 @@ performance/k6/
 - **k6 v2.2.0** instalado (verificar con `k6 version`).
 - Los tres servicios en ejecución mediante Docker Compose:
   `docker compose -f docker-compose.integration.yml up -d`
-- MS1 accesible en `http://localhost:8003`.
+- MS1 accesible a través de Traefik público en `http://localhost:8080`.
 
 ## Variables de entorno
 
 Todos los scripts aceptan `BASE_URL` para cambiar el objetivo:
 
 ```powershell
-k6 run -e BASE_URL=http://localhost:8003 healthcheck.js
+k6 run -e BASE_URL=http://localhost:8080 healthcheck.js
 ```
 
-Por defecto, `BASE_URL = http://localhost:8003`.
+Por defecto, `BASE_URL = http://localhost:8080`.
 
 ### RUN_ID (obligatorio para scripts de escritura)
 
 Los scripts que crean documentos requieren `RUN_ID`, un identificador único por ejecución que se incluye en el contenido de cada PDF para evitar duplicados de checksum entre ejecuciones:
 
 ```powershell
-k6 run -e BASE_URL=http://localhost:8003 -e RUN_ID=mi-ejecucion-1 upload_small_pdf.js
+k6 run -e BASE_URL=http://localhost:8080 -e RUN_ID=mi-ejecucion-1 upload_small_pdf.js
 ```
 
 Si no se proporciona `RUN_ID`, k6 genera uno automáticamente con `crypto.randomUUID()`. El valor usado se registra en la consola y en el resumen final (`teardown`).
@@ -58,10 +58,10 @@ Si no se proporciona `RUN_ID`, k6 genera uno automáticamente con `crypto.random
 
 ```powershell
 # Con RUN_ID explícito (recomendado para reproducibilidad)
-k6 run -e BASE_URL=http://localhost:8003 -e RUN_ID=run-2026-11-09-01 -e ITERATIONS=5 upload_small_pdf.js
+k6 run -e BASE_URL=http://localhost:8080 -e RUN_ID=run-2026-11-09-01 -e ITERATIONS=5 upload_small_pdf.js
 
 # Con RUN_ID autogenerado
-k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=3 crud_cycle.js
+k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=3 crud_cycle.js
 ```
 
 Si se proporciona `RUN_ID` vacío, el escenario se detiene con un error claro.
@@ -70,22 +70,22 @@ Si se proporciona `RUN_ID` vacío, el escenario se detiene con un error claro.
 
 ```powershell
 # Baseline: 1 VU, healthcheck
-k6 run -e BASE_URL=http://localhost:8003 healthcheck.js
+k6 run -e BASE_URL=http://localhost:8080 healthcheck.js
 
 # Baseline: 1 VU, listado de documentos, 30 segundos
-k6 run -e BASE_URL=http://localhost:8003 -e VUS=1 -e DURATION=30s list_documents.js
+k6 run -e BASE_URL=http://localhost:8080 -e VUS=1 -e DURATION=30s list_documents.js
 
 # Subida de PDF pequeño (controlado, 5 iteraciones máx.)
-k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=5 upload_small_pdf.js
+k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=5 upload_small_pdf.js
 
 # Ciclo CRUD controlado (3 iteraciones máx.)
-k6 run -e BASE_URL=http://localhost:8003 -e ITERATIONS=3 crud_cycle.js
+k6 run -e BASE_URL=http://localhost:8080 -e ITERATIONS=3 crud_cycle.js
 
 # Estrés progresivo de lecturas (10 → 25 → 50 VUs, 30s por etapa)
-k6 run -e BASE_URL=http://localhost:8003 stress_progressive.js
+k6 run -e BASE_URL=http://localhost:8080 stress_progressive.js
 
 # Estrés progresivo con etapas personalizadas
-k6 run -e BASE_URL=http://localhost:8003 -e VUS_STAGE_1=10 -e DURATION_STAGE_1=20s -e VUS_STAGE_2=25 -e DURATION_STAGE_2=20s -e VUS_STAGE_3=50 -e DURATION_STAGE_3=20s stress_progressive.js
+k6 run -e BASE_URL=http://localhost:8080 -e VUS_STAGE_1=10 -e DURATION_STAGE_1=20s -e VUS_STAGE_2=25 -e DURATION_STAGE_2=20s -e VUS_STAGE_3=50 -e DURATION_STAGE_3=20s stress_progressive.js
 ```
 
 ## Valores predeterminados (primera baseline)
@@ -128,10 +128,24 @@ los scripts actuales.
 
 ## Diferencia: MS2 directo vs integración completa
 
-- **MS2 directo:** `POST http://localhost:8002/extract` (solo extracción, sin MongoDB).
-- **Integración completa:** `POST http://localhost:8003/documents/` (MS1 → MS3 → MS2,
+- **MS2 individual:** ejecutar k6/curl en un contenedor temporal conectado a `proxy_internal`
+  y llamar a `http://traefik-internal:8080/extract`. No publicar MS2 ni crear una ruta pública.
+- **Integración completa:** `POST http://localhost:8080/documents/` (MS1 → MS3 → MS2,
   con persistencia en MongoDB). Los scripts de esta carpeta prueban la integración
   completa a través de MS1.
+
+Ejemplo Bash para ejecutar el benchmark aislado de MS2 desde `pdfinfraestructure/`,
+una vez que el stack esté iniciado y la imagen k6 esté disponible localmente:
+
+```bash
+docker run --rm --network proxy_internal \
+  --mount type=bind,source="$PWD",target=/workspace,readonly \
+  --workdir /workspace/performance/k6/ms2 \
+  grafana/k6 run -e BASE_URL=http://traefik-internal:8080 ms2_official_spike.js
+```
+
+Este contenedor temporal solo participa en `proxy_internal`; no publica puertos.
+El benchmark integrado debe ejecutarse desde el host contra `localhost:8080`.
 
 ## Métricas recogidas por k6
 

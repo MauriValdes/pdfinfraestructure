@@ -1,17 +1,17 @@
 // =============================================================================
 // k6 — Escenario 1: Healthcheck de MS1
 //
-// Endpoint: GET /health (MS1, publicado en http://localhost:8003)
+// Endpoint: GET /health (MS1, vía Traefik público en http://localhost:8080)
 // Descripci\u00f3n: Mide la latencia del healthcheck b\u00e1sico de liveness del
 // gateway. No persiste datos ni invoca a MS3/MS2.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 healthcheck.js
+//   k6 run -e BASE_URL=http://localhost:8080 healthcheck.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 export const options = {
   // Baseline: 1 VU constante, duraci\u00f3n corta

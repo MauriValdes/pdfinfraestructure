@@ -5,13 +5,13 @@
 // Descripción: Consulta un documento preexistente por su ID. Solo realiza
 // solicitudes GET. No crea, modifica ni elimina documentos.
 // Uso:
-//   k6 run -e BASE_URL=http://localhost:8003 -e DOC_ID=<id> performance/k6/get_document_by_id_pure.js
+//   k6 run -e BASE_URL=http://localhost:8080 -e DOC_ID=<id> performance/k6/get_document_by_id_pure.js
 // =============================================================================
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8003';
+export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const DOC_ID = __ENV.DOC_ID;
 
 export const options = {
@@ -29,7 +29,7 @@ const errorRate = new Rate('get_document_by_id_pure_errors');
 export function setup() {
   if (!DOC_ID || DOC_ID.trim() === '') {
     throw new Error(
-      'DOC_ID es obligatorio y no puede estar vacío. Ejemplo: k6 run -e BASE_URL=http://localhost:8003 -e DOC_ID=<id> performance/k6/get_document_by_id_pure.js'
+      'DOC_ID es obligatorio y no puede estar vacío. Ejemplo: k6 run -e BASE_URL=http://localhost:8080 -e DOC_ID=<id> performance/k6/get_document_by_id_pure.js'
     );
   }
   return { docId: DOC_ID.trim() };
