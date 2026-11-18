@@ -1,4 +1,4 @@
-﻿
+
 # =============================================================================
 # docker-compose.integration.yml — Etapa 7 / 9.5
 # Orquestación conjunta MS1 (Gateway) + MS3 (CRUD) -> MS2 (Extract)
@@ -172,7 +172,6 @@ services:
     build:
       context: ../pdfapigateway
       dockerfile: Dockerfile
-    container_name: integracion_ms1_gateway
     restart: unless-stopped
     depends_on:
       # Espera a que MS3 esté sana: el gateway deriva toda solicitud a MS3.

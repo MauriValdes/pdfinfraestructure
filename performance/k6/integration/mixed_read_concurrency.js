@@ -24,7 +24,7 @@ function parsePositiveDuration(envValue, fallback) {
 }
 
 // PDF m\u00ednimo v\u00e1lido generado inline (para crear documentos propios en setup)
-const MINIMAL_PDF = `%PDF-1.4
+const MINIMAL_PDF_TEMPLATE = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
@@ -45,6 +45,26 @@ trailer
 startxref
 178
 %%EOF`;
+
+function correctStartxref(pdf) {
+  const eofIndex = pdf.lastIndexOf('%%EOF');
+  if (eofIndex < 0) {
+    throw new Error('El PDF base no contiene %%EOF');
+  }
+  const prefix = pdf.slice(0, eofIndex);
+  const xrefMarkerIndex = prefix.lastIndexOf('\nxref\n');
+  if (xrefMarkerIndex < 0) {
+    throw new Error('El PDF base no contiene una tabla xref');
+  }
+  const xrefOffset = xrefMarkerIndex + 1;
+  const startxrefPattern = /startxref\n\d+\n$/;
+  if (!startxrefPattern.test(prefix)) {
+    throw new Error('El PDF base no contiene un valor startxref válido');
+  }
+  return prefix.replace(startxrefPattern, `startxref\n${xrefOffset}\n`) + '%%EOF';
+}
+
+const MINIMAL_PDF = correctStartxref(MINIMAL_PDF_TEMPLATE);
 
 export const options = {
   vus: parsePositiveInt(__ENV.VUS, 1),
@@ -71,29 +91,59 @@ const errorRate = new Rate('mixed_read_errors');
 
 // Almacena un ID de documento v\u00e1lido por VU (creado en la primera iteraci\u00f3n)
 const docIdByVU = new Map();
+const postAttemptedByVU = new Set();
 
 export default function (data) {
   const vu = __VU;
+  let postIdError = false;
 
   // Asegurar que este VU tiene un documento propio para consultar
-  if (!docIdByVU.has(vu)) {
-    const pdfBytes = MINIMAL_PDF + `\n% run_id=${data.runId} vu=${vu}\n`;
+  if (!docIdByVU.has(vu) && !postAttemptedByVU.has(vu)) {
+    // Marcar antes del envío para no repetir un POST fallido o ambiguo.
+    postAttemptedByVU.add(vu);
+    const runComment = `% run_id=${data.runId} vu=${vu}`;
+    const pdfBytes = MINIMAL_PDF.replace(
+      'startxref\n',
+      `\n${runComment}\nstartxref\n`
+    );
     const formData = {
       file: http.file(pdfBytes, `mixed_vu_${vu}.pdf`, 'application/pdf'),
     };
     const postRes = http.post(`${BASE_URL}/documents/`, formData, {
       tags: { name: 'POST /documents/ (setup)' },
     });
+    let docId = null;
     if (postRes.status === 201) {
       try {
-        docIdByVU.set(vu, postRes.json().id);
+        const payload = postRes.json();
+        if (
+          payload &&
+          typeof payload === 'object' &&
+          typeof payload.id === 'string' &&
+          payload.id.trim() !== ''
+        ) {
+          docId = payload.id;
+        }
       } catch (e) {
-        // no se pudo obtener el ID, se saltar\u00e1 GET por ID
+        // La respuesta no es JSON válido; se continuará con GET de listado.
       }
+    }
+
+    if (docId) {
+      docIdByVU.set(vu, docId);
+      console.log(
+        `[mixed_read_concurrency] documento creado: RUN_ID=${data.runId} VU=${vu} id=${docId}`
+      );
+    } else {
+      postIdError = true;
+      console.error(
+        `[mixed_read_concurrency] no se obtuvo un ID válido: RUN_ID=${data.runId} VU=${vu} HTTP=${postRes.status}; se usará GET de listado en esta iteración`
+      );
     }
   }
 
   const docId = docIdByVU.get(vu);
+  let getOk;
 
   // 70% listado, 30% consulta individual
   if (Math.random() < 0.70 && docId) {
@@ -104,7 +154,7 @@ export default function (data) {
     const ok = check(res, {
       'GET by id status 200': (r) => r.status === 200,
     });
-    if (!ok) errorRate.add(1); else errorRate.add(0);
+    getOk = ok;
   } else {
     // GET /documents (listado)
     const res = http.get(`${BASE_URL}/documents`, {
@@ -120,8 +170,9 @@ export default function (data) {
         }
       },
     });
-    if (!ok) errorRate.add(1); else errorRate.add(0);
+    getOk = ok;
   }
 
+  errorRate.add(postIdError || !getOk ? 1 : 0);
   sleep(1);
 }

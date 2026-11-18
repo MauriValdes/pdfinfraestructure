@@ -16,8 +16,6 @@ import { Rate } from 'k6/metrics';
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
-const createdIds = [];
-
 export function setup() {
   const runId = __ENV.RUN_ID !== undefined ? __ENV.RUN_ID : crypto.randomUUID();
   if (!runId || runId.trim() === '') {
@@ -30,7 +28,7 @@ export function setup() {
 }
 
 // PDF mínimo válido generado inline (PyMuPDF lo acepta: tiene firma %PDF-)
-const MINIMAL_PDF = `%PDF-1.4
+const MINIMAL_PDF_TEMPLATE = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
@@ -52,6 +50,26 @@ startxref
 178
 %%EOF`;
 
+function correctStartxref(pdf) {
+  const eofIndex = pdf.lastIndexOf('%%EOF');
+  if (eofIndex < 0) {
+    throw new Error('El PDF base no contiene %%EOF');
+  }
+  const prefix = pdf.slice(0, eofIndex);
+  const xrefMarkerIndex = prefix.lastIndexOf('\nxref\n');
+  if (xrefMarkerIndex < 0) {
+    throw new Error('El PDF base no contiene una tabla xref');
+  }
+  const xrefOffset = xrefMarkerIndex + 1;
+  const startxrefPattern = /startxref\n\d+\n$/;
+  if (!startxrefPattern.test(prefix)) {
+    throw new Error('El PDF base no contiene un valor startxref válido');
+  }
+  return prefix.replace(startxrefPattern, `startxref\n${xrefOffset}\n`) + '%%EOF';
+}
+
+const MINIMAL_PDF = correctStartxref(MINIMAL_PDF_TEMPLATE);
+
 export const options = {
   vus: 1,
   iterations: ITERATIONS,
@@ -66,7 +84,11 @@ const errorRate = new Rate('upload_small_errors');
 
 export default function (data) {
 
-  const pdfBytes = MINIMAL_PDF + `\n% run_id=${data.runId} iter=${Date.now()}\n`;
+  const runComment = `% run_id=${data.runId} iter=${Date.now()}`;
+  const pdfBytes = MINIMAL_PDF.replace(
+    'startxref\n',
+    `\n${runComment}\nstartxref\n`
+  );
   const formData = {
     file: http.file(pdfBytes, `small_${Date.now()}.pdf`, 'application/pdf'),
   };
@@ -100,7 +122,6 @@ export default function (data) {
   });
 
   if (docId) {
-    createdIds.push(docId);
     console.log(`[upload_small_pdf] documento creado: id=${docId} iteracion=${Date.now()}`);
   }
 
@@ -115,5 +136,5 @@ export default function (data) {
 
 export function teardown(data) {
   console.log(`[upload_small_pdf] RUN_ID = ${data.runId}`);
-  console.log(`[upload_small_pdf] resumen: ${createdIds.length} documento(s) creado(s): ${createdIds.join(', ')}`);
+  console.log('[upload_small_pdf] los IDs creados se registran en los logs de cada iteración');
 }
