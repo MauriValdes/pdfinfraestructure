@@ -123,7 +123,6 @@ services:
     build:
       context: ../pdfcrudservice
       dockerfile: Dockerfile
-    container_name: integracion_crud_service
     restart: unless-stopped
     depends_on:
       # Espera a MongoDB sano antes de arrancar (el lifespan de MS3
