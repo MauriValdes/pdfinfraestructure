@@ -1,4 +1,5 @@
-﻿# =============================================================================
+﻿
+# =============================================================================
 # docker-compose.integration.yml — Etapa 7 / 9.5
 # Orquestación conjunta MS1 (Gateway) + MS3 (CRUD) -> MS2 (Extract)
 # con MongoDB como única dependencia de persistencia.
@@ -130,8 +131,9 @@ services:
       db:
         condition: service_healthy
     environment:
-      # --- MongoDB (credenciales interpoladas desde .env) ---
-      MONGO_URL: "${MONGO_URL_DOCKER:-mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@db:27017/?authSource=admin}"
+      # --- MongoDB (usuarios independientes de aplicación y testing) ---
+      MONGO_URL: "${MONGO_URL_DOCKER:?Defina MONGO_URL_DOCKER en el archivo .env}"
+      MONGO_TEST_URL: "${MONGO_TEST_URL_DOCKER:?Defina MONGO_TEST_URL_DOCKER en el archivo .env}"
       MONGO_DB_DEV: ${MONGO_DB_DEV:-pdf_database_dev}
       MONGO_COLLECTION: ${MONGO_COLLECTION:-processed_pdfs}
       # --- Límite de tamaño de PDF (MB) ---
@@ -234,4 +236,3 @@ networks:
 volumes:
   mongo_data:
     name: pdfinfraestructure_mongo_data
-
