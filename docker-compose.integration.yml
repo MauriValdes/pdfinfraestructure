@@ -84,6 +84,16 @@ services:
       # Configuración real de MS2: límite de tamaño de PDF (MB)
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Admisión por réplica (Factor 8): misma cuota que en los benchmarks
+      # de una instancia. Con 5 réplicas la capacidad agregada es 5 × 2 = 10.
+      MAX_ADMITTED_EXTRACTIONS: ${MAX_ADMITTED_EXTRACTIONS:-2}
+    # Misma cuota por réplica usada en los benchmarks de una instancia
+    # (pdfextractext/docker-compose.yml). El límite es por contenedor.
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
     healthcheck:
       # GET /health verificado en MS2 (src/main.py). La imagen base
       # python:3.12-slim no incluye curl; se usa la stdlib de Python.
