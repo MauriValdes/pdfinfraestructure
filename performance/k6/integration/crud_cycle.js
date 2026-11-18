@@ -15,9 +15,6 @@ import { Rate } from 'k6/metrics';
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
-const createdIds = [];
-const deletedIds = [];
-
 export function setup() {
   const runId = __ENV.RUN_ID !== undefined ? __ENV.RUN_ID : crypto.randomUUID();
   if (!runId || runId.trim() === '') {
@@ -30,7 +27,7 @@ export function setup() {
 }
 
 // PDF mínimo válido generado inline
-const MINIMAL_PDF = `%PDF-1.4
+const MINIMAL_PDF_TEMPLATE = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
@@ -52,6 +49,26 @@ startxref
 178
 %%EOF`;
 
+function correctStartxref(pdf) {
+  const eofIndex = pdf.lastIndexOf('%%EOF');
+  if (eofIndex < 0) {
+    throw new Error('El PDF base no contiene %%EOF');
+  }
+  const prefix = pdf.slice(0, eofIndex);
+  const xrefMarkerIndex = prefix.lastIndexOf('\nxref\n');
+  if (xrefMarkerIndex < 0) {
+    throw new Error('El PDF base no contiene una tabla xref');
+  }
+  const xrefOffset = xrefMarkerIndex + 1;
+  const startxrefPattern = /startxref\n\d+\n$/;
+  if (!startxrefPattern.test(prefix)) {
+    throw new Error('El PDF base no contiene un valor startxref válido');
+  }
+  return prefix.replace(startxrefPattern, `startxref\n${xrefOffset}\n`) + '%%EOF';
+}
+
+const MINIMAL_PDF = correctStartxref(MINIMAL_PDF_TEMPLATE);
+
 export const options = {
   vus: 1,
   iterations: ITERATIONS,
@@ -66,7 +83,11 @@ const errorRate = new Rate('crud_cycle_errors');
 
 export default function (data) {
   // Paso 1: Crear (POST)
-  const pdfBytes = MINIMAL_PDF + `\n% run_id=${data.runId} iter=${Date.now()}\n`;
+  const runComment = `% run_id=${data.runId} iter=${Date.now()}`;
+  const pdfBytes = MINIMAL_PDF.replace(
+    'startxref\n',
+    `\n${runComment}\nstartxref\n`
+  );
   const formData = {
     file: http.file(pdfBytes, `crud_${Date.now()}.pdf`, 'application/pdf'),
   };
@@ -90,8 +111,12 @@ export default function (data) {
     errorRate.add(1);
     return;
   }
+  if (!docId) {
+    console.error('[crud_cycle] POST respondió 201 sin ID; se omiten PATCH y DELETE');
+    errorRate.add(1);
+    return;
+  }
 
-  createdIds.push(docId);
   console.log(`[crud_cycle] documento creado: id=${docId} iteracion=${Date.now()}`);
 
   // Paso 2: Actualizar parcialmente (PATCH) con campos válidos
@@ -124,8 +149,11 @@ export default function (data) {
   });
 
   if (delOk && docId) {
-    deletedIds.push(docId);
     console.log(`[crud_cycle] documento eliminado: id=${docId} iteracion=${Date.now()}`);
+  } else if (docId) {
+    console.error(
+      `[crud_cycle] DELETE fallido para documento propio id=${docId}; no se intentará una limpieza global`
+    );
   }
 
   if (!delOk) {
@@ -138,12 +166,6 @@ export default function (data) {
 }
 
 export function teardown(data) {
-  const remaining = createdIds.filter(id => !deletedIds.includes(id));
   console.log(`[crud_cycle] RUN_ID = ${data.runId}`);
-  console.log(`[crud_cycle] resumen: ${createdIds.length} creado(s), ${deletedIds.length} eliminado(s)`);
-  console.log(`[crud_cycle] creados: ${createdIds.join(', ')}`);
-  console.log(`[crud_cycle] eliminados: ${deletedIds.join(', ')}`);
-  if (remaining.length > 0) {
-    console.log(`[crud_cycle] ADVERTENCIA: documentos no eliminados (quedaron en BD): ${remaining.join(', ')}`);
-  }
+  console.log('[crud_cycle] IDs y resultados de DELETE registrados por iteración');
 }

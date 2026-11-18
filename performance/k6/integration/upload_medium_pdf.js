@@ -14,8 +14,6 @@ import { Rate } from 'k6/metrics';
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const ITERATIONS = parseInt(__ENV.ITERATIONS, 10);
 
-const createdIds = [];
-
 export function setup() {
   const runId = __ENV.RUN_ID !== undefined ? __ENV.RUN_ID : crypto.randomUUID();
   if (!runId || runId.trim() === '') {
@@ -63,7 +61,44 @@ export const options = {
 const errorRate = new Rate('upload_medium_errors');
 
 export default function (data) {
-  const pdfBytes = MINIMAL_PDF + `\n% run_id=${data.runId} iter=${Date.now()}\n`;
+  // Mantener el fixture en ~50 KiB sin alterar la estructura ni los offsets
+  // xref del PDF: el padding es un comentario antes del marcador %%EOF.
+  const targetBytes = 50 * 1024;
+  const pdfPrefix = MINIMAL_PDF.slice(0, MINIMAL_PDF.lastIndexOf('%%EOF'));
+  const xrefMarker = '\nxref\n';
+  const xrefMarkerIndex = pdfPrefix.lastIndexOf(xrefMarker);
+  if (xrefMarkerIndex < 0) {
+    throw new Error('El PDF base no contiene una tabla xref');
+  }
+  const xrefOffset = xrefMarkerIndex + 1;
+  const startxrefPattern = /startxref\n\d+\n$/;
+  if (!startxrefPattern.test(pdfPrefix)) {
+    throw new Error('El PDF base no contiene un valor startxref válido');
+  }
+  const correctedPdfPrefix = pdfPrefix.replace(
+    startxrefPattern,
+    `startxref\n${xrefOffset}\n`
+  );
+  const startxrefIndex = correctedPdfPrefix.lastIndexOf('startxref\n');
+  if (startxrefIndex < 0) {
+    throw new Error('No se pudo localizar el bloque startxref corregido');
+  }
+  const pdfBeforeStartxref = correctedPdfPrefix.slice(0, startxrefIndex);
+  const startxrefSection = correctedPdfPrefix.slice(startxrefIndex);
+  const runComment = `% run_id=${data.runId} iter=${Date.now()}`;
+  const paddingMarker = '% payload=';
+  const fixedLength =
+    pdfBeforeStartxref.length +
+    runComment.length +
+    1 + // newline before the padding comment
+    paddingMarker.length +
+    1 + // newline before %%EOF
+    startxrefSection.length +
+    '%%EOF'.length;
+  const paddingLength = Math.max(0, targetBytes - fixedLength);
+  const pdfBytes =
+    `${pdfBeforeStartxref}${runComment}\n${paddingMarker}` +
+    `${'x'.repeat(paddingLength)}\n${startxrefSection}%%EOF`;
   const formData = {
     file: http.file(pdfBytes, `medium_${Date.now()}.pdf`, 'application/pdf'),
   };
@@ -97,7 +132,6 @@ export default function (data) {
   });
 
   if (docId) {
-    createdIds.push(docId);
     console.log(`[upload_medium_pdf] documento creado: id=${docId} iteracion=${Date.now()}`);
   }
 
@@ -112,5 +146,5 @@ export default function (data) {
 
 export function teardown(data) {
   console.log(`[upload_medium_pdf] RUN_ID = ${data.runId}`);
-  console.log(`[upload_medium_pdf] resumen: ${createdIds.length} documento(s) creado(s): ${createdIds.join(', ')}`);
+  console.log('[upload_medium_pdf] los IDs creados se registran en los logs de cada iteración');
 }
