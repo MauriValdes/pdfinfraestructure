@@ -170,7 +170,6 @@ services:
     build:
       context: ../pdfapigateway
       dockerfile: Dockerfile
-    container_name: integracion_ms1_gateway
     restart: unless-stopped
     depends_on:
       # Espera a que MS3 esté sana: el gateway deriva toda solicitud a MS3.
