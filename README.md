@@ -106,8 +106,19 @@ del modo de ejecución:
 | `MS3_URL_DOCKER`, `EXTRACT_SERVICE_URL_DOCKER` | Direcciones internas inyectadas por el Compose integrado. |
 | `EXTRACT_SERVICE_URL_SINGLE_DOCKER`, `MONGO_URL_DOCKER` | Overrides opcionales para el Compose individual de MS3 y la URI interna de MongoDB, respectivamente. |
 | `MAX_FILE_SIZE_MB`, `EXTRACT_SERVICE_TIMEOUT`, `MS3_TIMEOUT`, `LOG_LEVEL` | Ajustes de aplicación inyectados en los servicios correspondientes. |
+| `UPLOAD_LEASE_SECONDS`, `UPLOAD_LEASE_RENEW_INTERVAL_SECONDS` | Lease de propiedad de carga de MS3 y su intervalo de renovación; opcionales en el Compose integrado. |
 | `TRAEFIK_PUBLIC_HOST_PORT` | Puerto host de Traefik público en el Compose integrado; default `8080`. |
 | `APP_PORT`, `MS2_HOST_PORT` | Solo publican MS3/MS2, respectivamente, al combinar el Compose individual con su override `docker-compose.single.yml`; no cambian el puerto interno `8000`. |
+
+El lease de carga de MS3 usa `UPLOAD_LEASE_SECONDS` (duración, default
+`120`) y `UPLOAD_LEASE_RENEW_INTERVAL_SECONDS` (intervalo de renovación,
+default `30`). Ambos valores se expresan en segundos, deben ser enteros
+positivos y el intervalo debe ser estrictamente menor que la duración. Son
+opcionales: si no se definen, MS3 utiliza los defaults de Settings. El Compose
+integrado transmite los valores definidos en el `.env` central; no establece
+defaults propios. Estas variables configuran exclusivamente la propiedad de
+carga de MS3 y son independientes del lease de procesamiento y heartbeat del
+worker.
 
 Para Compose individual, indicar explícitamente el archivo central con
 `--env-file ../pdfinfraestructure/.env` al ejecutar desde el repositorio del
